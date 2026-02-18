@@ -1,3 +1,6 @@
+
+
+
 @import url('https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap');
 
 @import "tailwindcss";
@@ -9,4 +12,17 @@
   font-optical-sizing: auto;
   font-weight: 400;
   font-style: normal;
+}
+
+.custom-pagination .swiper-pagination-bullet {
+  width: 10px;
+  height: 10px;
+  background: #cbd5e1; /* gray-300 */
+  opacity: 1;
+}
+
+.custom-pagination .swiper-pagination-bullet-active {
+  background: #052c2c !important; /* Your dark green color */
+  width: 12px;
+  height: 12px;
 }
