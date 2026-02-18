@@ -6,6 +6,7 @@ import ClientLogos from '../ClientLogos/ClientLogos';
 import Features from '../Features/Features';
 import BeMarchent from '../BeMarchent/BeMarchent';
 import Testimonials from '../Testimonials/Testimonials';
+import FAQ from '../FAQ/FAQ';
 
 const Home = () => {
     return (
@@ -17,6 +18,7 @@ const Home = () => {
            <Features></Features>
            <BeMarchent></BeMarchent>
            <Testimonials></Testimonials>
+           <FAQ></FAQ>
         </div>
     );
 };
