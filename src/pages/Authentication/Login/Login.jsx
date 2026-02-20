@@ -1,5 +1,6 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
+import { Link } from 'react-router';
 
 const Login = () => {
     const { 
@@ -61,7 +62,7 @@ const Login = () => {
                     </button>
                     
                     <div className="mt-6 text-center text-sm text-gray-500">
-                        Don't have an account? <span className="text-[#052c2c] font-bold cursor-pointer hover:underline">Sign up</span>
+                        Don't have an account? <span className="text-[#052c2c] font-bold cursor-pointer hover:underline"> <Link to={'/register'}>Sign up</Link> </span>
                     </div>
                 </form>
             </div>
