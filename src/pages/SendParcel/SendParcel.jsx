@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { toast, Toaster } from 'react-hot-toast';
 import useAuth from '../../hooks/useAuth';
 import Swal from 'sweetalert2';
+import useAxiosSecure from '../../hooks/useAxiosSecure';
 
 
 const branchData = [
@@ -700,187 +701,222 @@ const branchData = [
 ];
 
 const SendParcel = () => {
-    const { user } = useAuth(); 
-    const { register, handleSubmit, watch, formState: { errors }, reset } = useForm({
-        defaultValues: {
-            senderName: user?.displayName || "",
-            senderEmail: user?.email || "", // 2. Automatically map email to form
-            parcelType: "Document"
-        }
-    });
+  const { user } = useAuth();
+  const { register, handleSubmit, watch, formState: { errors }, reset } = useForm({
+    defaultValues: {
+      senderName: user?.displayName || "",
+      senderEmail: user?.email || "",
+      parcelType: "Document"
+    }
+  });
 
-    const [pricing, setPricing] = useState({ base: 0, weightExtra: 0, locationExtra: 0, total: 60 });
+  const axiousSecure = useAxiosSecure();
 
-    // Watch fields for dynamic calculations
-    const parcelType = watch("parcelType");
-    const weight = watch("weight");
-    const receiverDistrict = watch("receiverDistrict");
-    const senderDistrict = watch("senderDistrict");
+  const [pricing, setPricing] = useState({ base: 0, weightExtra: 0, locationExtra: 0, total: 60 });
 
-    const senderAreas = branchData.find(b => b.district === senderDistrict)?.covered_area || [];
-    const receiverAreas = branchData.find(b => b.district === receiverDistrict)?.covered_area || [];
+  const parcelType = watch("parcelType");
+  const weight = watch("weight");
+  const receiverDistrict = watch("receiverDistrict");
+  const senderDistrict = watch("senderDistrict");
 
-    // Pricing Logic
-    useEffect(() => {
-        let base = 0, weightExtra = 0, locationExtra = 0;
+  const senderAreas = branchData.find(b => b.district === senderDistrict)?.covered_area || [];
+  const receiverAreas = branchData.find(b => b.district === receiverDistrict)?.covered_area || [];
 
-        if (parcelType === "Document") {
-            base = 60;
-        } else {
-            base = 100; // First 1kg
-            const w = parseFloat(weight) || 1;
-            if (w > 1) weightExtra = (Math.ceil(w) - 1) * 50;
-        }
+  // Calculate Price Dynamically
+  useEffect(() => {
+    let base = 0, weightExtra = 0, locationExtra = 0;
+    if (parcelType === "Document") {
+      base = 60;
+    } else {
+      base = 100;
+      const w = parseFloat(weight) || 1;
+      if (w > 1) weightExtra = (Math.ceil(w) - 1) * 50;
+    }
+    if (receiverDistrict && receiverDistrict !== "Dhaka") locationExtra = 50;
 
-        if (receiverDistrict && receiverDistrict !== "Dhaka") locationExtra = 50;
+    setPricing({ base, weightExtra, locationExtra, total: base + weightExtra + locationExtra });
+  }, [parcelType, weight, receiverDistrict]);
 
-        setPricing({ base, weightExtra, locationExtra, total: base + weightExtra + locationExtra });
-    }, [parcelType, weight, receiverDistrict]);
+  // Handle Form Submission
+  const onSubmit = async (data) => {
+    const trackingId = `TRK-${Math.floor(Date.now() / 1000)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const bookingDate = new Date().toISOString();
 
-    const onSubmit = (data) => {
-        
-        const trackingId = `TRK-${Math.floor(Date.now() / 1000)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-        const bookingDate = new Date().toISOString(); 
-        Swal.fire({
-            title: '<span style="color: #052c2c">Review Booking</span>',
-            html: `
+    Swal.fire({
+      title: '<span style="color: #052c2c">Review Your Booking</span>',
+      html: `
                 <div style="text-align: left; font-family: 'Urbanist', sans-serif;">
                     <div style="background: #f8f9fa; padding: 12px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #eee;">
                         <p style="margin:0"><strong>Tracking ID:</strong> ${trackingId}</p>
-                        <p style="margin:0"><strong>Sender Email:</strong> ${user?.email}</p>
+                        <p style="margin:0"><strong>User Email:</strong> ${user?.email}</p>
                     </div>
-                    <p><strong>To:</strong> ${data.receiverName} | ${data.receiverPhone}</p>
-                    <p><strong>Destination:</strong> ${data.receiverArea}, ${data.receiverDistrict}</p>
+                    <p><strong>To:</strong> ${data.receiverName} (${data.receiverPhone})</p>
+                    <p><strong>Dest:</strong> ${data.receiverArea}, ${data.receiverDistrict}</p>
                     <hr style="margin: 10px 0; border-top: 1px dashed #ccc;">
-                    <div style="display: flex; justify-content: space-between;"><span>Base:</span> <span>$${pricing.base}</span></div>
-                    <div style="display: flex; justify-content: space-between;"><span>Weight Extra:</span> <span>$${pricing.weightExtra}</span></div>
-                    <div style="display: flex; justify-content: space-between;"><span>Location:</span> <span>$${pricing.locationExtra}</span></div>
-                    <div style="display: flex; justify-content: space-between; font-weight: bold; border-top: 2px solid #bef264; margin-top: 8px; padding-top: 8px; color: #052c2c;">
-                        <span>Grand Total:</span> <span style="font-size: 1.2em;">$${pricing.total}</span>
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; color: #052c2c;">
+                        <span>Total Payable:</span> <span style="font-size: 1.2em;">$${pricing.total}</span>
                     </div>
                 </div>
             `,
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonColor: '#bef264',
-            cancelButtonColor: '#f3f4f6',
-            confirmButtonText: '<span style="color: #052c2c; font-weight: bold;">Pay & Confirm</span>',
-            cancelButtonText: '<span style="color: #666;">Back to Edit</span>',
-            reverseButtons: true
-        }).then((result) => {
-            if (result.isConfirmed) {
-                const finalParcel = {
-                    ...data,
-                    senderEmail: user?.email, 
-                    deliveryCost: pricing.total,
-                    trackingId,
-                    bookingDate,
-                    status: "pending",
-                    paymentStatus: "unpaid"
-                };
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonColor: '#bef264',
+      cancelButtonColor: '#f3f4f6',
+      confirmButtonText: '<span style="color: #052c2c; font-weight: bold;">Confirm & Save</span>',
+      cancelButtonText: '<span style="color: #666;">Edit Details</span>',
+      reverseButtons: true
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const finalParcel = {
+          ...data,
+          senderEmail: user?.email,
+          deliveryCost: pricing.total,
+          trackingId,
+          bookingDate,
+          status: "pending",
+          paymentStatus: "unpaid"
+        };
 
-                console.log("Saving to DB:", finalParcel);
-                toast.success("Parcel Booked Successfully!");
-                
-            }
-        });
-    };
+        try {
+          // Update this URL to your production/local server endpoint
+          // const response = await fetch('http://localhost:3000/api/parcels', {
+          //     method: 'POST',
+          //     headers: { 'Content-Type': 'application/json' },
+          //     body: JSON.stringify(finalParcel)
+          // });
 
-    return (
-        <section className="py-10 bg-gray-50 min-h-screen px-4 font-urbanist">
-            <Toaster position="top-center" />
-            
-            <div className="max-w-6xl mx-auto bg-white rounded-[40px] shadow-sm p-8 md:p-16 border border-gray-100">
-                <header className="mb-10">
-                    <h1 className="text-5xl font-bold text-[#052c2c] mb-2">Send A Parcel</h1>
-                    <p className="text-gray-500">Booking from: <span className="font-bold text-[#052c2c]">{user?.email}</span></p>
-                </header>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-12">
-                    {/* SECTION 1: PARCEL DETAILS */}
-                    <div className="flex flex-col gap-6">
-                        <h3 className="text-2xl font-bold text-[#052c2c]">Parcel Description</h3>
-                        <div className="flex gap-8 bg-gray-100 p-3 rounded-2xl w-fit">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold">
-                                <input type="radio" value="Document" {...register("parcelType")} className="radio radio-success" />
-                                <span>Document</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer font-bold">
-                                <input type="radio" value="Not-Document" {...register("parcelType")} className="radio radio-success" />
-                                <span>Not-Document</span>
-                            </label>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="form-control flex flex-col items-start">
-                                <label className="label font-bold text-xs text-gray-500">Parcel Title</label>
-                                <input type="text" {...register("parcelTitle", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="e.g. Gift Box" />
-                            </div>
-                            <div className="form-control flex flex-col items-start">
-                                <label className="label font-bold text-xs text-gray-500">Weight (KG)</label>
-                                <input type="number" step="0.1" disabled={parcelType === "Document"} {...register("weight")} className="input input-bordered w-full rounded-xl disabled:bg-gray-200" placeholder="0.0" />
-                            </div>
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-                        {/* SENDER INFO */}
-                        <div className="flex flex-col gap-5">
-                            <h3 className="text-xl font-bold text-[#052c2c] border-b pb-2">Sender</h3>
-                            <input type="text" {...register("senderName")} readOnly className="input input-bordered w-full rounded-xl bg-gray-50 font-bold" />
-                            <input type="email" {...register("senderEmail")} readOnly className="input input-bordered w-full rounded-xl bg-gray-50 text-gray-400" />
-                            <input type="tel" {...register("senderPhone", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Your Phone Number" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <select {...register("senderDistrict", { required: true })} className="select select-bordered w-full rounded-xl text-sm">
-                                    <option value="">District</option>
-                                    {branchData.map((b, i) => <option key={i} value={b.district}>{b.district}</option>)}
-                                </select>
-                                <select {...register("senderArea", { required: true })} disabled={!senderAreas.length} className="select select-bordered w-full rounded-xl text-sm">
-                                    <option value="">Area</option>
-                                    {senderAreas.map((area, i) => <option key={i} value={area}>{area}</option>)}
-                                </select>
-                            </div>
-                            <input type="text" {...register("senderAddress", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Full Pickup Address" />
-                        </div>
 
-                        {/* RECEIVER INFO */}
-                        <div className="flex flex-col gap-5">
-                            <h3 className="text-xl font-bold text-[#052c2c] border-b pb-2">Receiver</h3>
-                            <input type="text" {...register("receiverName", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Receiver Name" />
-                            <input type="tel" {...register("receiverPhone", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Receiver Phone Number" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <select {...register("receiverDistrict", { required: true })} className="select select-bordered w-full rounded-xl text-sm">
-                                    <option value="">District</option>
-                                    {branchData.map((b, i) => <option key={i} value={b.district}>{b.district}</option>)}
-                                </select>
-                                <select {...register("receiverArea", { required: true })} disabled={!receiverAreas.length} className="select select-bordered w-full rounded-xl text-sm">
-                                    <option value="">Area</option>
-                                    {receiverAreas.map((area, i) => <option key={i} value={area}>{area}</option>)}
-                                </select>
-                            </div>
-                            <input type="text" {...register("receiverAddress", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Full Delivery Address" />
-                        </div>
-                    </div>
+          axiousSecure.post('/parcels', finalParcel)
+            .then(res => {
+              console.log(res.data);
+              if (res.data.insertedId) {
 
-                    {/* PRICE SUMMARY BAR */}
-                    <div className="bg-[#052c2c] p-8 rounded-[32px] flex flex-col md:flex-row justify-between items-center text-white border-4 border-[#bef264]/20 shadow-2xl">
-                        <div className="flex gap-10 text-center md:text-left">
-                            <div>
-                                <p className="text-gray-400 text-xs uppercase mb-1">Total Weight</p>
-                                <p className="text-xl font-bold">{parcelType === "Document" ? "N/A" : `${weight || 1}kg`}</p>
-                            </div>
-                            <div>
-                                <p className="text-[#bef264] text-xs uppercase mb-1 font-bold">Total Delivery Fee</p>
-                                <p className="text-5xl font-black text-[#bef264]">${pricing.total}</p>
-                            </div>
-                        </div>
-                        <button type="submit" className="btn bg-[#bef264] hover:bg-white border-none text-[#052c2c] px-16 rounded-2xl h-16 text-xl font-black transition-all mt-6 md:mt-0 shadow-lg">
-                            Book Parcel
-                        </button>
-                    </div>
-                </form>
+                //Redirect for payment page
+
+                Swal.fire({
+                  title: 'Success!',
+                  text: 'Your parcel has been booked and saved.',
+                  icon: 'success',
+                  confirmButtonColor: '#bef264'
+                });
+              }
+            })
+
+          // const resData = await response.json();
+
+          // if (resData.insertedId) {
+          //     Swal.fire({
+          //         title: 'Success!',
+          //         text: 'Your parcel has been booked and saved.',
+          //         icon: 'success',
+          //         confirmButtonColor: '#bef264'
+          //     });
+          //     reset(); // Resets form fields
+          // } else {
+          //     throw new Error("Failed to insert data");
+          // }
+        } catch (error) {
+          console.error("Error saving parcel:", error);
+          toast.error("Database Error: Could not save booking.");
+        }
+      }
+    });
+  };
+
+  return (
+    <section className="py-10 bg-gray-50 min-h-screen px-4 font-urbanist">
+      <Toaster position="top-center" />
+
+      <div className="max-w-6xl mx-auto bg-white rounded-[40px] shadow-sm p-8 md:p-16 border border-gray-100">
+        <header className="mb-10">
+          <h1 className="text-5xl font-bold text-[#052c2c] mb-2">Book A Parcel</h1>
+          <p className="text-gray-500 italic">Logged in as: {user?.email}</p>
+        </header>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-12">
+
+          {/* SECTION 1: PARCEL DETAILS */}
+          <div className="flex flex-col gap-6">
+            <h3 className="text-2xl font-bold text-[#052c2c]">1. Parcel Info</h3>
+            <div className="flex gap-8 bg-gray-100 p-3 rounded-2xl w-fit">
+              <label className="flex items-center gap-2 cursor-pointer font-bold">
+                <input type="radio" value="Document" {...register("parcelType")} className="radio radio-success" />
+                <span>Document</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer font-bold">
+                <input type="radio" value="Not-Document" {...register("parcelType")} className="radio radio-success" />
+                <span>Not-Document</span>
+              </label>
             </div>
-        </section>
-    );
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="form-control">
+                <label className="label font-bold text-xs text-gray-500">Parcel Title</label>
+                <input type="text" {...register("parcelTitle", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="e.g. Laptop" />
+              </div>
+              <div className="form-control">
+                <label className="label font-bold text-xs text-gray-500">Weight (KG)</label>
+                <input type="number" step="0.1" disabled={parcelType === "Document"} {...register("weight")} className="input input-bordered w-full rounded-xl disabled:bg-gray-200" placeholder="1.0" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            {/* SENDER */}
+            <div className="flex flex-col gap-5">
+              <h3 className="text-xl font-bold text-[#052c2c] border-b pb-2">2. Sender</h3>
+              <input type="text" {...register("senderName")} readOnly className="input input-bordered w-full rounded-xl bg-gray-50 font-bold" />
+              <input type="tel" {...register("senderPhone", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Your Phone Number" />
+              <div className="grid grid-cols-2 gap-4">
+                <select {...register("senderDistrict", { required: true })} className="select select-bordered w-full rounded-xl">
+                  <option value="">District</option>
+                  {branchData.map((b, i) => <option key={i} value={b.district}>{b.district}</option>)}
+                </select>
+                <select {...register("senderArea", { required: true })} disabled={!senderAreas.length} className="select select-bordered w-full rounded-xl">
+                  <option value="">Area</option>
+                  {senderAreas.map((area, i) => <option key={i} value={area}>{area}</option>)}
+                </select>
+              </div>
+              <input type="text" {...register("senderAddress", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Pickup Full Address" />
+            </div>
+
+            {/* RECEIVER */}
+            <div className="flex flex-col gap-5">
+              <h3 className="text-xl font-bold text-[#052c2c] border-b pb-2">3. Receiver</h3>
+              <input type="text" {...register("receiverName", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Receiver Name" />
+              <input type="tel" {...register("receiverPhone", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Receiver Phone" />
+              <div className="grid grid-cols-2 gap-4">
+                <select {...register("receiverDistrict", { required: true })} className="select select-bordered w-full rounded-xl">
+                  <option value="">District</option>
+                  {branchData.map((b, i) => <option key={i} value={b.district}>{b.district}</option>)}
+                </select>
+                <select {...register("receiverArea", { required: true })} disabled={!receiverAreas.length} className="select select-bordered w-full rounded-xl">
+                  <option value="">Area</option>
+                  {receiverAreas.map((area, i) => <option key={i} value={area}>{area}</option>)}
+                </select>
+              </div>
+              <input type="text" {...register("receiverAddress", { required: true })} className="input input-bordered w-full rounded-xl" placeholder="Delivery Full Address" />
+            </div>
+          </div>
+
+          {/* PRICE SUMMARY */}
+          <div className="bg-[#052c2c] p-8 rounded-[32px] flex flex-col md:flex-row justify-between items-center text-white shadow-2xl">
+            <div className="flex gap-10">
+              <div>
+                <p className="text-gray-400 text-xs uppercase mb-1">Total Fee</p>
+                <p className="text-5xl font-black text-[#bef264]">${pricing.total}</p>
+              </div>
+            </div>
+            <button type="submit" className="btn bg-[#bef264] hover:bg-white border-none text-[#052c2c] px-16 rounded-2xl h-16 text-xl font-black transition-all">
+              Book Parcel
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
 };
 
 export default SendParcel;
+
